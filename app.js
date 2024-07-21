@@ -6,9 +6,10 @@ var logger = require('morgan');
 
 var indexRouter = require('./routes/index');
 var api = require('./routes/api');
-
+const connectDB = require('./config/db');
+const cors = require('cors');
 var app = express();
-
+app.use(cors());
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'hbs');
@@ -21,6 +22,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
 app.use('/api', api);
+app.use('/videos', express.static(path.join(__dirname, './public/video'))); // Phục vụ tệp tĩnh
+
+
+connectDB();
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

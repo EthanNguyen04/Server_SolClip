@@ -1,5 +1,6 @@
 # Node modules
 node_modules/
-
+/public/images/
+/public/video/
 # Environment variables
 .env

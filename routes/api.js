@@ -281,5 +281,53 @@ router.post('/list-nft-for-sale', async (req, res) => {
         res.status(500).send('Something went wrong.');
     }
 });
+// Endpoint để lấy tất cả NFTs
+router.get('/nfts', async (req, res) => {
+    try {
+        const nfts = await NFT.find({}); // Lấy tất cả NFTs
+        res.status(200).json(nfts); // Trả về danh sách NFTs
+    } catch (err) {
+        console.error('Error fetching NFTs:', err);
+        res.status(500).send('Something went wrong.');
+    }
+});
 
+/// Endpoint để mua NFT
+router.post('/buy-nft', async (req, res) => {
+    try {
+        const { idNFT, buyerId } = req.body;
+
+        // Kiểm tra đầu vào
+        if (!idNFT || !buyerId) {
+            return res.status(400).json({ error: 'Missing required fields.' });
+        }
+
+        // Cấu hình cho fetch
+        const options = {
+            method: 'POST',
+            headers: {
+                accept: 'application/json',
+                'x-api-key': process.env.APIKEY, // Thay thế bằng API key thực tế của bạn
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({ buyerId })
+        };
+
+        const response = await fetch(`https://api.gameshift.dev/nx/unique-assets/${idNFT}/buy`, options);
+        const data = await response.json();
+        console.log(data)
+
+        if (response.ok) {
+            // Gửi lại phản hồi với URL thanh toán
+            res.status(200).json({ consentUrl: data.consentUrl });
+        } else {
+            // Xử lý các lỗi từ API
+            console.error('Failed to buy NFT, status:', response.status, data);
+            res.status(response.status).json({ error: 'Failed to buy NFT.' });
+        }
+    } catch (err) {
+        console.error('Error processing request:', err);
+        res.status(500).json({ error: 'Something went wrong.' });
+    }
+});
 module.exports = router;

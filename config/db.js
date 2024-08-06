@@ -1,10 +1,11 @@
 // module.exports = connectDB;
 const mongoose = require('mongoose')
+require('dotenv').config();
+
 mongoose.set('strictQuery', true)
-const atlat = "mongodb+srv://thangnvph23924:nTzgvA3JQqrNEMMo@cluster0.sqjfe4h.mongodb.net/video?retryWrites=true&w=majority";
 const connectDB = async ()=>{
     try {
-        await mongoose.connect(atlat, 
+        await mongoose.connect(process.env.MONGO_URI, 
             {
                 useNewUrlParser: true,
                 useUnifiedTopology: true,

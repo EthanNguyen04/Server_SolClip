@@ -6,7 +6,9 @@ const User = require('../model/user'); // Import model User
 const NFT = require('../model/nft');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 require('dotenv').config();
-
+const { Connection, PublicKey, Keypair, clusterApiUrl } = require('@solana/web3.js');
+const { getOrCreateAssociatedTokenAccount, transfer } = require('@solana/spl-token');
+const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
 
 const router = express.Router();
 
@@ -330,4 +332,131 @@ router.post('/buy-nft', async (req, res) => {
         res.status(500).json({ error: 'Something went wrong.' });
     }
 });
+
+// Endpoint để lấy NFT theo ownerReferenceId
+router.post('/fetch-nfts', async (req, res) => {
+    try {
+        const { ownerReferenceId } = req.body;
+
+        if (!ownerReferenceId) {
+            return res.status(400).json({ error: 'Missing required field: ownerReferenceId.' });
+        }
+
+        const options = {
+            method: 'GET',
+            headers: {
+                accept: 'application/json',
+                'x-api-key': process.env.APIKEY
+            }
+        };
+
+        const response = await fetch(`https://api.gameshift.dev/nx/items?types=&collectionId=${process.env.collectionId}&ownerReferenceId=${ownerReferenceId}`, options);
+        const data = await response.json();
+
+        if (response.ok) {
+            res.status(200).json(data);
+        } else {
+            console.error('Failed to fetch NFTs, status:', response.status, data);
+            res.status(response.status).json({ error: 'Failed to fetch NFTs.' });
+        }
+    } catch (err) {
+        console.error('Error fetching NFTs:', err);
+        res.status(500).json({ error: 'Something went wrong.' });
+    }
+});
+
+// Endpoint to update useNft, from, and to fields of a user
+// Endpoint to update useNft, from, and to fields of a user
+router.put('/update-user-nft/:publickey', async (req, res) => {
+    try {
+        const { publickey } = req.params;
+        const { idNft } = req.body;
+
+        // Find the NFT by its 'id' field
+        const nft = await NFT.findOne({ id: idNft });
+        if (!nft) {
+            return res.status(404).send('NFT not found.');
+        }
+        console.log('NFT found:', nft);
+        console.log('NFT from:', nft.from);
+        console.log('NFT to:', nft.to);
+        
+        // Find and update the user with the NFT details
+        const updatedUser = await User.findOneAndUpdate(
+            { publickey }, // Find the user by publickey
+            {
+                $set: {
+                    useNft: nft.id, // Update useNft with the NFT id
+                    from: nft.from, // Update from with the NFT from value
+                    to: nft.to,      // Update to with the NFT to value
+                }
+            },
+            { new: true } // Return the updated user document
+        );
+
+        if (!updatedUser) {
+            return res.status(404).send('User not found.');
+        }
+
+        console.log('User updated successfully with NFT details:', updatedUser);
+        res.status(200).json(updatedUser); // Return the updated user
+    } catch (err) {
+        console.error('Error updating user with NFT details:', err);
+        res.status(500).send('Something went wrong.');
+    }
+});
+
+// Private key của ví gửi (thay bằng ví của bạn)
+const senderPrivateKeyArray = JSON.parse(process.env.SENDER_PRIVATE_KEY);
+const senderPrivateKey = new Uint8Array(senderPrivateKeyArray);
+const senderKeypair = Keypair.fromSecretKey(senderPrivateKey)
+
+// Token Mint Address của SPL Token
+const mintPublicKey = new PublicKey('Bw1kdoBCzxKRn2RR1HLFDCEjiHBybQzZsWzWmxwQuniP');
+
+// Endpoint để thực hiện chuyển token
+router.post('/transfer', async (req, res) => {
+    try {
+        const { recipientPublicKeyString, amount } = req.body;
+
+        if (!recipientPublicKeyString || !amount) {
+            return res.status(400).send('Thiếu recipientPublicKey hoặc amount');
+        }
+
+        // Public key của người nhận
+        const recipientPublicKey = new PublicKey(recipientPublicKeyString);
+
+        // Tạo token account hoặc lấy token account của người nhận
+        const recipientTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            senderKeypair,
+            mintPublicKey,
+            recipientPublicKey
+        );
+
+        // Lấy token account của người gửi
+        const senderTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            senderKeypair,
+            mintPublicKey,
+            senderKeypair.publicKey
+        );
+
+        // Thực hiện chuyển token
+        const txSignature = await transfer(
+            connection,
+            senderKeypair,
+            senderTokenAccount.address, // Token Account của người gửi
+            recipientTokenAccount.address, // Token Account của người nhận
+            senderKeypair.publicKey,
+            amount * 10**9 // Điều chỉnh theo số chữ số thập phân của token
+        );
+
+        res.status(200).json({ message: 'Chuyển token thành công!', txSignature });
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Đã xảy ra lỗi trong quá trình chuyển token');
+    }
+});
+
 module.exports = router;

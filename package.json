@@ -6,6 +6,9 @@
     "start": "node ./bin/www"
   },
   "dependencies": {
+    "@solana/spl-token": "^0.4.8",
+    "@solana/wallet-adapter-react": "^0.15.35",
+    "@solana/web3.js": "^1.95.2",
     "bcrypt": "^5.1.1",
     "cookie-parser": "~1.4.4",
     "cors": "^2.8.5",

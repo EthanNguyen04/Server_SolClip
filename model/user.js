@@ -6,6 +6,9 @@ const UserSchema = new Schema({
     name: {type: String},
     email: {type: String},
     img: {type: String},
+    useNft: {type: String},
+    from: {type: Number},
+    to: {type: Number}
 },
 {
     timestamps: true

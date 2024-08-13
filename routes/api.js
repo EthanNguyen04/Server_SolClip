@@ -1,6 +1,9 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const { exec } = require('child_process');
+const fs = require('fs'); // Import fs module
+const bip39 = require('bip39');
 const Video = require('../model/vd');
 const User = require('../model/user'); // Import model User
 const NFT = require('../model/nft');
@@ -410,6 +413,7 @@ router.put('/update-user-nft/:publickey', async (req, res) => {
 const senderPrivateKeyArray = JSON.parse(process.env.SENDER_PRIVATE_KEY);
 const senderPrivateKey = new Uint8Array(senderPrivateKeyArray);
 const senderKeypair = Keypair.fromSecretKey(senderPrivateKey)
+console.log(senderKeypair)
 
 // Token Mint Address của SPL Token
 const mintPublicKey = new PublicKey('Bw1kdoBCzxKRn2RR1HLFDCEjiHBybQzZsWzWmxwQuniP');
@@ -456,6 +460,69 @@ router.post('/transfer', async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).send('Đã xảy ra lỗi trong quá trình chuyển token');
+    }
+});
+
+
+
+router.get('/create-wallet', (req, res) => {
+    const walletPath = path.join(__dirname, 'wallet.json');
+
+    const command = `solana-keygen new --outfile ${walletPath} --no-passphrase --force`;
+
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error creating wallet: ${error.message}`);
+            return res.status(500).json({ error: 'Failed to create wallet' });
+        }
+        if (stderr) {
+            console.error(`Stderr: ${stderr}`);
+            return res.status(500).json({ error: 'Failed to create wallet' });
+        }
+
+        // Kiểm tra đầu ra stdout
+        console.log('stdout:', stdout);
+
+        // Trích xuất public key từ stdout
+        const publicKeyMatch = stdout.match(/pubkey:\s+([A-Za-z0-9]+)/);
+        const publicKey = publicKeyMatch ? publicKeyMatch[1] : null;
+
+        // Trích xuất seed phrase từ stdout
+        const seedPhraseMatch = stdout.match(/Save this seed phrase to recover your new keypair:\n([^\n]+)/);
+        const seedPhrase = seedPhraseMatch ? seedPhraseMatch[1].trim() : null;
+
+        if (publicKey && seedPhrase) {
+            res.json({
+                publicKey: publicKey,
+                seedPhrase: seedPhrase
+            });
+        } else {
+            res.status(500).json({ error: 'Failed to parse wallet information' });
+        }
+    });
+});
+
+router.post('/recover-wallet', async (req, res) => {
+    const { seedPhrase } = req.body;
+
+    if (!seedPhrase) {
+        return res.status(400).json({ error: 'Seed phrase is required' });
+    }
+
+    try {
+        if (!bip39.validateMnemonic(seedPhrase)) {
+            return res.status(400).json({ error: 'Invalid seed phrase' });
+        }
+
+        const seed = bip39.mnemonicToSeedSync(seedPhrase);
+        const keypair = Keypair.fromSeed(seed.slice(0, 32)); // Lấy 32 bytes đầu tiên của seed
+
+        res.json({
+            publicKey: keypair.publicKey.toBase58(),
+            privateKey: Buffer.from(keypair.secretKey).toString('hex')
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error generating keypair', details: error.message });
     }
 });
 

@@ -230,7 +230,7 @@ router.post('/create-nft', async (req, res) => {
                 imageUrl: createdImageUrl,
                 name: createdName,
                 description: createdDescription,
-                publickey,
+                publickey: publickey,
                 from, // Thêm thuộc tính from
                 to     // Thêm thuộc tính to
             });
@@ -526,4 +526,58 @@ router.post('/recover-wallet', async (req, res) => {
     }
 });
 
+
+router.post('/items', async (req, res) => {
+    const { ownerReferenceId } = req.body;
+
+    if (!ownerReferenceId) {
+        return res.status(400).json({ error: 'ownerReferenceId is required' });
+    }
+
+    const url = `https://api.gameshift.dev/nx/items?types=&collectionId=${process.env.collectionId}&ownerReferenceId=${ownerReferenceId}`;
+    const options = {
+        method: 'GET',
+        headers: {
+            accept: 'application/json',
+            'x-api-key': process.env.APIKEY,
+        },
+    };
+
+    try {
+        const response = await fetch(url, options);
+        const data = await response.json();
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: data });
+        }
+
+        res.json(data);
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'An error occurred while fetching data' });
+    }
+});
+
+router.get('/fetch-items', async (req, res) => {
+    const url = 'https://api.gameshift.dev/nx/items?types=&forSale=true&collectionId=5d898246-60d1-454b-b2da-000ad11f24c3&ownerReferenceId=A1Q6zrfqw5MUWSWHykQLyaPUkoUvwCHpXF7WPPLy2qWA';
+    const options = {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        'x-api-key': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOiI2OGU0YTgxMS02YWIyLTRiNzktYjM2Yi0wYTk0ODUxZjE4MjQiLCJzdWIiOiIzMDQzZWNmZS0zMTM0LTQ1NzMtYThkNS05NGEwYTg1YjM0ZWYiLCJpYXQiOjE3MjI4NzUzODd9.cS9j5_TDDkJtKbZmhmZoHQdyIM8aOcOMdGBqYVrs5GI'
+      }
+    };
+  
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching items:', error);
+      res.status(500).json({ error: 'Failed to fetch items' });
+    }
+  });
 module.exports = router;

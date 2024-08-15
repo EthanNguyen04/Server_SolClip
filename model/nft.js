@@ -6,8 +6,8 @@ const NFTSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
-  from: { type: Number, required: true }, 
-  to: { type: Number, required: true }   
+  from: { type: Number,  }, 
+  to: { type: Number,  }   
 });
 
 const NFT = mongoose.model('NFT', NFTSchema);

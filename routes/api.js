@@ -230,7 +230,7 @@ router.post('/create-nft', async (req, res) => {
                 imageUrl: createdImageUrl,
                 name: createdName,
                 description: createdDescription,
-                publickey,
+                publickey: publickey,
                 from, // Thêm thuộc tính from
                 to     // Thêm thuộc tính to
             });
@@ -526,4 +526,87 @@ router.post('/recover-wallet', async (req, res) => {
     }
 });
 
+
+router.post('/items', async (req, res) => {
+    const { ownerReferenceId } = req.body;
+
+    if (!ownerReferenceId) {
+        return res.status(400).json({ error: 'ownerReferenceId is required' });
+    }
+
+    const url = `https://api.gameshift.dev/nx/items?types=&collectionId=${process.env.collectionId}&ownerReferenceId=${ownerReferenceId}`;
+    const options = {
+        method: 'GET',
+        headers: {
+            accept: 'application/json',
+            'x-api-key': process.env.APIKEY,
+        },
+    };
+
+    try {
+        const response = await fetch(url, options);
+        const data = await response.json();
+
+        if (!response.ok) {
+            return res.status(response.status).json({ error: data });
+        }
+
+        res.json(data);
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'An error occurred while fetching data' });
+    }
+});
+
+router.get('/fetch-items', async (req, res) => {
+    const url = 'https://api.gameshift.dev/nx/items?types=&forSale=true&collectionId=5d898246-60d1-454b-b2da-000ad11f24c3&ownerReferenceId=A1Q6zrfqw5MUWSWHykQLyaPUkoUvwCHpXF7WPPLy2qWA';
+    const options = {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        'x-api-key': process.env.APIKEY
+      }
+    };
+  
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching items:', error);
+      res.status(500).json({ error: 'Failed to fetch items' });
+    }
+  });
+
+  // get all token 
+  router.post('/get_branch', async(req, res)=>{
+    const { publicKey } = req.body;
+
+
+    const url = `https://api.shyft.to/sol/v1/wallet/all_tokens?network=devnet&wallet=${publicKey}`;
+    const options = {
+        method: 'GET',
+        headers: {
+            accept: 'application/json',
+            'x-api-key': process.env.APIKEY_SHYFT,
+        },
+    };
+
+    try {
+        const response = await fetch(url, options);
+        const data = await response.json();
+        if (response.ok) {
+            res.status(200).json(data);
+        } else {
+            console.error('Failed :', response.status, data);
+            res.status(response.status).json({ error: 'Failed.' });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'An error occurred while fetching data' });
+    }
+  })
 module.exports = router;

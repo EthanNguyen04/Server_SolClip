@@ -564,7 +564,7 @@ router.get('/fetch-items', async (req, res) => {
       method: 'GET',
       headers: {
         accept: 'application/json',
-        'x-api-key': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJrZXkiOiI2OGU0YTgxMS02YWIyLTRiNzktYjM2Yi0wYTk0ODUxZjE4MjQiLCJzdWIiOiIzMDQzZWNmZS0zMTM0LTQ1NzMtYThkNS05NGEwYTg1YjM0ZWYiLCJpYXQiOjE3MjI4NzUzODd9.cS9j5_TDDkJtKbZmhmZoHQdyIM8aOcOMdGBqYVrs5GI'
+        'x-api-key': process.env.APIKEY
       }
     };
   
@@ -580,4 +580,33 @@ router.get('/fetch-items', async (req, res) => {
       res.status(500).json({ error: 'Failed to fetch items' });
     }
   });
+
+  // get all token 
+  router.post('/get_branch', async(req, res)=>{
+    const { publicKey } = req.body;
+
+
+    const url = `https://api.shyft.to/sol/v1/wallet/all_tokens?network=devnet&wallet=${publicKey}`;
+    const options = {
+        method: 'GET',
+        headers: {
+            accept: 'application/json',
+            'x-api-key': process.env.APIKEY_SHYFT,
+        },
+    };
+
+    try {
+        const response = await fetch(url, options);
+        const data = await response.json();
+        if (response.ok) {
+            res.status(200).json(data);
+        } else {
+            console.error('Failed :', response.status, data);
+            res.status(response.status).json({ error: 'Failed.' });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'An error occurred while fetching data' });
+    }
+  })
 module.exports = router;

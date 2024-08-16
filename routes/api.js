@@ -507,13 +507,13 @@ router.get('/create-wallet', (req, res) => {
             res.status(500).json({ error: 'Failed to parse wallet information' });
         }
         // Xóa nội dung của file wallet.json sau khi hoàn tất
-        // fs.writeFile(walletPath, '', (err) => {
-        //     if (err) {
-        //         console.error(`Failed to clear wallet.json: ${err.message}`);
-        //     } else {
-        //         console.log(`wallet.json has been cleared.`);
-        //     }
-        // });
+        fs.writeFile(walletPath, '', (err) => {
+            if (err) {
+                console.error(`Failed to clear wallet.json: ${err.message}`);
+            } else {
+                console.log(`wallet.json has been cleared.`);
+            }
+        });
     });
 });
 

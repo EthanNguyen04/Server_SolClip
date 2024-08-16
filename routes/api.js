@@ -9,8 +9,8 @@ const User = require('../model/user'); // Import model User
 const NFT = require('../model/nft');
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 require('dotenv').config();
-const { Connection, PublicKey, Keypair, clusterApiUrl } = require('@solana/web3.js');
-const { getOrCreateAssociatedTokenAccount, transfer } = require('@solana/spl-token');
+const {Transaction , Connection, PublicKey, Keypair, clusterApiUrl, sendAndConfirmTransaction } = require('@solana/web3.js');
+const { getOrCreateAssociatedTokenAccount, transfer,createTransferInstruction } = require('@solana/spl-token');
 const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
 
 const router = express.Router();
@@ -57,7 +57,7 @@ router.post('/upload-video', videoUpload.single('file'), async (req, res, next) 
     }
 }, async (req, res) => {
     try {
-        const { publickey, title, content } = req.body;
+        const { publickey, title, content, kol } = req.body;
         const url = req.videoUrl; // Lấy URL tạm thời đã lưu từ middleware trước đó
 
         // Tìm user bằng publickey để xác minh rằng người dùng tồn tại
@@ -70,7 +70,8 @@ router.post('/upload-video', videoUpload.single('file'), async (req, res, next) 
             publickey, // Sử dụng publickey của user
             title,
             content,
-            url
+            url,
+            kol
         });
 
         await newVideo.save();
@@ -85,13 +86,19 @@ router.post('/upload-video', videoUpload.single('file'), async (req, res, next) 
 // Endpoint để lấy danh sách tất cả video
 router.get('/videos', async (req, res) => {
     try {
-        const videos = await Video.find({});
+        // Tìm các video có giá trị kol bằng null
+        const videos = await Video.find({ kol: null });
+
+        if (videos.length === 0) {
+            return res.status(404).json({ message: 'No videos found' });
+        }
+
         res.json(videos);
-    } catch (err) {
-        res.status(500).send('Something went wrong.');
+    } catch (error) {
+        console.error('Error fetching videos:', error);
+        res.status(500).json({ error: 'Server error' });
     }
 });
-
 // Middleware để tải ảnh lên
 router.post('/add-user', imageUpload.single('img'), async (req, res) => {
     try {
@@ -195,7 +202,7 @@ router.get('/videos/user/:publickey', async (req, res) => {
 const CollectionId = process.env.collectionId;
 router.post('/create-nft', async (req, res) => {
     try {
-        const { description, imageUrl, name, publickey , from, to } = req.body;
+        const { description, imageUrl, name, publickey , from, to, kol} = req.body;
 
         // Cấu hình cho fetch
         const options = {
@@ -232,7 +239,8 @@ router.post('/create-nft', async (req, res) => {
                 description: createdDescription,
                 publickey: publickey,
                 from, // Thêm thuộc tính from
-                to     // Thêm thuộc tính to
+                to,     // Thêm thuộc tính to
+                kol
             });
 
             await newNFT.save();
@@ -413,10 +421,8 @@ router.put('/update-user-nft/:publickey', async (req, res) => {
 const senderPrivateKeyArray = JSON.parse(process.env.SENDER_PRIVATE_KEY);
 const senderPrivateKey = new Uint8Array(senderPrivateKeyArray);
 const senderKeypair = Keypair.fromSecretKey(senderPrivateKey)
-console.log(senderKeypair)
-
 // Token Mint Address của SPL Token
-const mintPublicKey = new PublicKey('Bw1kdoBCzxKRn2RR1HLFDCEjiHBybQzZsWzWmxwQuniP');
+const mintPublicKey = new PublicKey(process.env.TOKEN_ADDRESS);
 
 // Endpoint để thực hiện chuyển token
 router.post('/transfer', async (req, res) => {
@@ -467,6 +473,7 @@ router.post('/transfer', async (req, res) => {
 
 router.get('/create-wallet', (req, res) => {
     const walletPath = path.join(__dirname, 'wallet.json');
+    console.log("aaaaaaaaa"+walletPath)
 
     const command = `solana-keygen new --outfile ${walletPath} --no-passphrase --force`;
 
@@ -499,6 +506,14 @@ router.get('/create-wallet', (req, res) => {
         } else {
             res.status(500).json({ error: 'Failed to parse wallet information' });
         }
+        // Xóa nội dung của file wallet.json sau khi hoàn tất
+        // fs.writeFile(walletPath, '', (err) => {
+        //     if (err) {
+        //         console.error(`Failed to clear wallet.json: ${err.message}`);
+        //     } else {
+        //         console.log(`wallet.json has been cleared.`);
+        //     }
+        // });
     });
 });
 
@@ -609,4 +624,127 @@ router.get('/fetch-items', async (req, res) => {
         res.status(500).json({ error: 'An error occurred while fetching data' });
     }
   })
+
+  router.get('/videos/not-null-kol', async (req, res) => {
+    try {
+        // Tìm các video có giá trị kol khác null
+        const videos = await Video.find({ kol: { $ne: null } });
+        
+        if (videos.length === 0) {
+            return res.status(404).json({ message: 'No videos found' });
+        }
+
+        res.json(videos);
+    } catch (error) {
+        console.error('Error fetching videos:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Hàm sửa video theo publickey và cập nhật kol
+router.put('/update-video-kol', async (req, res) => {
+    try {
+        const { publickey, newKolValue } = req.body; // Nhận publickey và giá trị kol mới từ yêu cầu
+
+        if (!publickey || newKolValue === undefined) {
+            return res.status(400).json({ error: 'Thiếu publickey hoặc giá trị kol mới' });
+        }
+
+        // Tìm và cập nhật tất cả các video có publickey tương ứng
+        const result = await Video.updateMany(
+            { publickey: publickey }, // Điều kiện tìm kiếm video
+            { $set: { kol: newKolValue } } // Cập nhật giá trị kol
+        );
+
+        if (result.nModified === 0) {
+            return res.status(404).json({ message: 'Không tìm thấy video nào với publickey này' });
+        }
+
+        res.status(200).json({ message: `Đã cập nhật kol cho ${result.nModified} video(s)` });
+    } catch (error) {
+        console.error('Lỗi khi cập nhật video:', error);
+        res.status(500).json({ error: 'Đã xảy ra lỗi khi cập nhật video' });
+    }
+});
+// Địa chỉ ví nhận hoa hồng
+const commissionPublicKey = new PublicKey(process.env.ROSE_WALLET);
+
+// Endpoint để thực hiện chuyển token và tách hoa hồng
+router.post('/transfer-donate', async (req, res) => {
+    try {
+        const { privateKey, recipientPublicKeyString, amount } = req.body;
+
+        if (!privateKey || !recipientPublicKeyString || amount === undefined) {
+            return res.status(400).send('Thiếu thông tin cần thiết.');
+        }
+
+        // Kiểm tra xem amount có phải là số hợp lệ không
+        if (isNaN(amount) || amount <= 0) {
+            return res.status(400).send('Số lượng không hợp lệ.');
+        }
+
+        // Chuyển đổi private key từ chuỗi hex thành Uint8Array
+        const privateKeyBytes = Uint8Array.from(Buffer.from(privateKey, 'hex'));
+        const senderKeypair = Keypair.fromSecretKey(privateKeyBytes);
+
+        // Tạo public key cho người nhận và token
+        const recipientPublicKey = new PublicKey(recipientPublicKeyString);
+        const tokenMintAddress = new PublicKey(mintPublicKey);
+
+        // Tính toán hoa hồng và số lượng token thực tế
+        const commissionAmount = amount * 0.1; // 10% hoa hồng
+        const recipientAmount = amount * 0.9; // 90% còn lại
+
+        // Lấy hoặc tạo tài khoản token của người nhận hoa hồng
+        const commissionTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            senderKeypair,
+            tokenMintAddress,
+            commissionPublicKey
+        );
+
+        // Lấy hoặc tạo tài khoản token của người nhận
+        const recipientTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            senderKeypair,
+            tokenMintAddress,
+            recipientPublicKey
+        );
+
+        // Lấy tài khoản token của người gửi
+        const senderTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            senderKeypair,
+            tokenMintAddress,
+            senderKeypair.publicKey
+        );
+
+        // Tạo giao dịch chuyển token
+        const transaction = new Transaction().add(
+            // Chuyển hoa hồng 10% đến ví hoa hồng
+            createTransferInstruction(
+                senderTokenAccount.address,
+                commissionTokenAccount.address,
+                senderKeypair.publicKey,
+                commissionAmount * 10**9 // Điều chỉnh theo số chữ số thập phân của token
+            ),
+            // Chuyển số lượng token còn lại đến ví người nhận
+            createTransferInstruction(
+                senderTokenAccount.address,
+                recipientTokenAccount.address,
+                senderKeypair.publicKey,
+                recipientAmount * 10**9 // Điều chỉnh theo số chữ số thập phân của token
+            )
+        );
+
+        // Gửi giao dịch
+        const signature = await sendAndConfirmTransaction(connection, transaction, [senderKeypair]);
+
+        res.status(200).json({ message: 'Chuyển token thành công!', txSignature: signature });
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Đã xảy ra lỗi trong quá trình chuyển token');
+    }
+});
+
 module.exports = router;

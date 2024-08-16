@@ -6,6 +6,7 @@ const VideoSchema = new Schema({
     title: {type: String},
     content: {type: String},
     url: {type: String},
+    kol: {type: String}
 },
 {
     timestamps: true
